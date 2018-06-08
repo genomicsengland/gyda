@@ -194,22 +194,50 @@ else:
     print('Check python version')
 
 
+
 def get_matched_terms(target):
     """Return a dataframe of matched ontology terms using Jaccard to score."""
     jaccard_scores = []
     # process search term for matching
+    target = target.strip('\n')
     words = word_tokenize(target)
     filtered_target = [stemmer.stem(w) for w in words if w not in stop_words and w not in blacklist]
     target_set = set(filtered_target)
+
+    def build_result(item):
+        return [target, ', '.join(filtered_target),
+                ', '.join(list(item)), get_name_from_id(key), key, score]
+
+    def is_match(item):
+        # TODO: pre-build set
+        match_set = set( )
+        # NOTE: jaccard score implemented locally and optimised
+        len_intersection = len(target_set.intersection(match_set))
+        if len_intersection == 0:
+            return False
+        len_union = len(target_set.union(match_set))
+        score = (len_union - len_intersection) / len_union
+        # TODO: parametrise score threshold
+        return score <= 0.5
+
     # search ontology dictionary for matches using Jaccard distance
-    for key in d.keys():
-        for item in d[key]:
-            match_set = set(item)
-            score = jaccard_distance(target_set, match_set)
-            if score <= 0.5:
-                matched = [target.strip('\n'), ', '.join(filtered_target),
-                ', '.join(list(match_set)), get_name_from_id(key), key, score]
-                jaccard_scores.append(matched)
+    for key, items in d.items():
+
+        jaccard_scores = map(build_result, filter(is_match, x))
+        # for item in items:
+        #     # TODO: pre-build set
+        #     match_set = set(item)
+        #     # NOTE: jaccard score implemented locally and optimised
+        #     len_intersection = len(target_set.intersection(match_set))
+        #     if len_intersection == 0:
+        #         continue
+        #     len_union = len(target_set.union(match_set))
+        #     score = (len_union - len_intersection) / len_union
+        #     # TODO: parametrise score threshold
+        #     if score <= 0.5:
+        #         matched = [target, ', '.join(filtered_target),
+        #         ', '.join(list(match_set)), get_name_from_id(key), key, score]
+        #         jaccard_scores.append(matched)
     if len(jaccard_scores) == 0:
         logging.warning('No terms found matching: {}'.format(target))
     else:
