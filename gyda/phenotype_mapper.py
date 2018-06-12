@@ -1,9 +1,10 @@
-""" Takes a phenotype string and returns matching ontology terms """
+""" Takes a phenotype string and returns matching ontology terms - more exact"""
 import pronto
 import nltk
 from nltk.corpus import wordnet, stopwords
 from nltk.stem.snowball import SnowballStemmer
 from nltk.tokenize import word_tokenize
+from nltk.tokenize import RegexpTokenizer
 from nltk.metrics import jaccard_distance
 import pickle
 import pandas as pd
@@ -11,11 +12,13 @@ import sys
 import os
 import argparse
 import logging
+import urllib
+import json
 
+from datetime import datetime
+from sys import argv
 
-# fix for string encoding in python2
-#reload(sys)
-#sys.setdefaultencoding('utf-8')
+#start = datetime.now()
 
 # make sure nltk packages are installed
 nltk.download('stopwords', quiet=True)
@@ -31,195 +34,174 @@ snomed_file = '/Users/matthewwerlock/Documents/ontologies/sct2_Description_Full-
 # for stemming and stopword exclusion
 stemmer = SnowballStemmer("english", ignore_stopwords=True)
 stop_words = set(stopwords.words('english'))
-# improves the specificty of matches by excluding common words
-blacklist = ['syndrome', 'syndromic', 'abnormal', 'abnormality', 'familial', 'phenotype', 'phenotypic']
+# to remove punctuation during tokenisation
+tokenizer = RegexpTokenizer(r'\w+')
 
 # load HPO and DO ontology files into Ontology objects
 hpo = pronto.Ontology(hpo_file)
 do = pronto.Ontology(do_file)
 
-def parse_omim_file():
-    """Process OMIM flat file into dictionary"""
-    d_omim = {}
-    with open(omim_file, 'r') as f:
-        # file has a header and a footer that needs to be excluded
-        lines = f.readlines()[3:25809]
-        for line in lines:
-            titles = []
-            # skip removed or moved entries - if line.startswith('Caret'):
-            if line.startswith('Caret'):
-                continue
-            else:
-                line = line.strip().split('\t')
-                #main_title
-                titles.append(line[2].split(';')[::2][0])
-                #alt_titles
-                if len(line) > 3:
-                    titles = titles + [x.strip() for x in line[3].split(';') if len(x.strip()) > 0]
-                d_omim['OMIM:'+str(line[1])] = titles
-    return d_omim
 
-# prepare to combine OMIM data with HPO and DO data
-d_omim = parse_omim_file()
-
-#d_snomed = pd.read_csv(snomed_file, sep='\t', header=0, usecols=['conceptId', 'term']).drop_duplicates().groupby('conceptId').term.apply(list).to_dict()
-df_snomed = pd.read_csv(snomed_file, sep='\t', header=0, usecols=['conceptId', 'term']).drop_duplicates()
-df_snomed['conceptId'] = 'SNOMEDCT:'+df_snomed['conceptId'].astype(str)
-d_snomed = df_snomed.groupby('conceptId').term.apply(list).to_dict()
+def tokenize_and_stem_str(target):
+    """tokenize, filter, stem and back to string"""
+    words = tokenizer.tokenize(target)
+    filtered_target = [stemmer.stem(w) for w in words if w not in stop_words]
+    stem_str_target = ' '.join(filtered_target)
+    return stem_str_target
 
 
-def prepare_onto_dict():
-    """Prepare dictionary of combined ontologies."""
-    d = {}
-    # HPO - from .obo file
+def tokenize_and_stem_list(target):
+    """tokenize, filter and stem"""
+    words = tokenizer.tokenize(target)
+    filtered_target = [stemmer.stem(w) for w in words if w not in stop_words]
+    return filtered_target
+
+
+def tokenize_and_stem_set(target):
+    """tokenize, filter and stem"""
+    words = tokenizer.tokenize(target)
+    filtered_target = set([stemmer.stem(w) for w in words if w not in stop_words])
+    return filtered_target
+
+
+def make_set(row):
+    """add column of sets of stemmed terms to onto_df"""
+    set_list= set(row)
+    return set_list
+
+
+def exact_search(target):
+    """search with stemmed terms but requiring correct order"""
+    stem_target_str = tokenize_and_stem_str(target)
+    df = onto_df[onto_df.stem_str == stem_target_str]
+    df['target'] = target
+    df['score'] = 'exact'
+    df = df[['target', 'name', 'id', 'score']]
+    df.columns = ['phenotype', 'matched_term', 'id', 'score']
+    return df
+
+
+def jaccard_scores(row, target):
+    """calculate jaccard distance over dataframe entries"""
+    target_set = tokenize_and_stem_set(target)
+    match_set = row
+    score = jaccard_distance(target_set, match_set)
+    return score
+
+
+def fuzzy_search(target):
+    """search with stemmed terms using jaccard scores for similarity and filter on threshold"""
+    df = onto_df.copy()
+    df['score'] = df.stem_set.apply(jaccard_scores, args=[target])
+    df = df[df.score <= 0.5]
+    df['target'] = target
+    df = df[['target', 'name', 'id', 'score']]
+    df.score = df.score.astype(str)
+    df.columns = ['phenotype', 'matched_term', 'id', 'score']
+    return df
+
+
+def prepare_onto_df():
+    """combine ontos into dataframe"""
+    onto_dfs = []
     for entry in hpo:
         try:
             hpo_id = entry.id
             # gather main name and any synonyms
             names = [entry.name] + [str(x).split('"')[1] for x in entry.synonyms]
-            # loop through names and synonym_ids
-            snowballed_names = []
-            for name in names:
-                words = word_tokenize(name)
-                # exclude stop words and blacklisted words
-                filtered_name = [stemmer.stem(w) for w in words if w not in stop_words and w not in blacklist]
-                snowballed_names.append(filtered_name)
-            d[hpo_id] = snowballed_names
+            # loop through names and synonym_ids for orderedmatches
+            df = pd.DataFrame()
+            df['name'] = names
+            df['id'] = hpo_id
+            df['primary_name'] = entry.name
+            onto_dfs.append(df)
         except:
             pass
-    # DO - from .obo file
     for entry in do:
         try:
             do_id = entry.id
             # gather main name and any synonyms
             names = [entry.name] + [str(x).split('"')[1] for x in entry.synonyms]
-            # loop through names and synonym_ids
-            snowballed_names = []
-            for name in names:
-                words = word_tokenize(name)
-                # exclude stop words and blacklisted words
-                filtered_name = [stemmer.stem(w) for w in words if w not in stop_words and w not in blacklist]
-                snowballed_names.append(filtered_name)
-            d[do_id] = snowballed_names
+            # loop through names and synonym_ids for orderedmatches
+            df = pd.DataFrame()
+            df['name'] = names
+            df['id'] = do_id
+            df['primary_name'] = entry.name
+            onto_dfs.append(df)
         except:
             pass
     # OMIM - from .txt file (different structure to .obo)
-    d_omim = parse_omim_file()
-    for key in d_omim:
-        try:
-            snowballed_names = []
-            names = d_omim[key]
-            for name in names:
-                words = word_tokenize(name)
-                # exclude stop words and blacklisted words
-                filtered_name = [stemmer.stem(w) for w in words if w not in stop_words and w not in blacklist]
-                snowballed_names.append(filtered_name)
-            d[key] = snowballed_names
-        except:
-            pass
+    with open(omim_file, 'r') as f:
+        # file has a header and a footer that needs to be excluded
+        lines = f.readlines()[3:25809]
+        for line in lines:
+            try:
+                names = []
+                # skip removed or moved entries - if line.startswith('Caret'):
+                if line.startswith('Caret'):
+                    continue
+                else:
+                    line = line.strip().split('\t')
+                    #main_title
+                    names.append(line[2].split(';')[::2][0])
+                    #alt_titles
+                    if len(line) > 3:
+                        names = names + [x.strip() for x in line[3].split(';') if len(x.strip()) > 0]
+                df = pd.DataFrame()
+                df['name'] = names
+                df['id'] = 'OMIM:'+str(line[1])
+                df['primary_name'] = names[0]
+                onto_dfs.append(df)
+            except:
+                pass
     # SNOMED - from .txt file (different structure to .obo)
-    for key in d_snomed:
-        try:
-            snowballed_names = []
-            names = d_snomed[key]
-            for name in names:
-                words = word_tokenize(name)
-                # exclude stop words and blacklisted words
-                filtered_name = [stemmer.stem(w) for w in words if w not in stop_words and w not in blacklist]
-                snowballed_names.append(filtered_name)
-            d[key] = snowballed_names
-        except:
-            pass
-    return d
-
-
-# dictionaries for translating hpo names and ids
-hpo_id_to_name = {}
-for x in hpo:
-    hpo_id_to_name[x.id] = x.name
-
-# dictionaries for translating do names and ids
-do_id_to_name = {}
-for x in do:
-    do_id_to_name[x.id] = x.name
-
-# dictionaries for translating omim names and ids
-omim_id_to_name = {}
-for key in d_omim:
-    omim_id_to_name[key] = d_omim[key][0]
-
-# dictionaries for translating snomed names and ids
-snomed_id_to_name = {}
-for key in d_snomed:
-    snomed_id_to_name[key] = d_snomed[key][0]
-
-
-def get_name_from_id(id):
-    """Translate onto id to name."""
     try:
-        name = hpo_id_to_name[id]
-        return name
-    except Exception:
-        pass
-    try:
-        name = do_id_to_name[id]
-        return name
-    except Exception:
-        pass
-    try:
-        name = omim_id_to_name[id]
-        return name
-    except Exception:
-        pass
-    try:
-        name = snomed_id_to_name[id]
-        return name
+        df= pd.read_csv(snomed_file, sep='\t', header=0, usecols=['conceptId', 'term']).drop_duplicates()
+        #rename and rearrange columns
+        df['name'] = df.term
+        df['id'] = 'SNOMEDCT:'+df['conceptId'].astype(str)
+        df['primary_name'] = df.term
+        df = df[['name', 'id', 'primary_name']]
+        onto_dfs.append(df)
     except:
         pass
+    # panelapp - from  dict
+    try:
+        url = 'https://panelapp.genomicsengland.co.uk/WebServices/list_panels/'
+        response = urllib.request.urlopen(url)
+        data = json.load(response)
+        df = pd.DataFrame()
+        # prepare add panelapp data
+        panel_ids = []
+        panel_names = []
+        for panel in data['result']:
+            panel_ids.append('PANELAPP:'+panel['Panel_Id'])
+            panel_names.append(panel['Name'])
+        df['name'] = panel_names
+        df['id'] = panel_ids
+        df['primary_name'] = panel_names
+        onto_dfs.append(df)
+    except:
+        pass
+    onto_df = pd.concat(onto_dfs)
+    onto_df = onto_df.drop_duplicates()
+    return onto_df
 
 
-# ***** replace with pickle for testing to get speedup *****
-#d = prepare_onto_dict()
-#pickle.dump(d, open('/Users/matthewwerlock/Documents/ontologies/ont_d.p', 'wb'))
 if sys.version_info[0] == 3:
-    #d = prepare_onto_dict()
-    #pickle.dump(d, open('/Users/matthewwerlock/Documents/ontologies/ont_d_3.p', 'wb'))
-    d = pickle.load(open('/Users/matthewwerlock/Documents/ontologies/ont_d_3.p', 'rb'))
-#pickle.dump(d, open('/Users/matthewwerlock/Documents/ontologies/ont_d.p', 'wb'))
+    #onto_df = prepare_onto_df()
+    #onto_df['stem_str'] = onto_df.name.apply(tokenize_and_stem_str)
+    #onto_df['stem_set'] = onto_df.name.apply(tokenize_and_stem_set)
+    #pickle.dump(onto_df, open('/Users/matthewwerlock/Documents/ontologies/df3.p', 'wb'))
+    onto_df = pickle.load(open('/Users/matthewwerlock/Documents/ontologies/df3.p', 'rb'))
 elif sys.version_info[0] == 2:
-    #d = prepare_onto_dict()
-    #pickle.dump(d, open('/Users/matthewwerlock/Documents/ontologies/ont_d_2.p', 'wb'))
-    d = pickle.load(open('/Users/matthewwerlock/Documents/ontologies/ont_d_2.p', 'rb'))
+    #onto_df = prepare_onto_df()
+    #onto_df['stem_str'] = onto_df.name.apply(tokenize_and_stem_str)
+    #onto_df['stem_set'] = onto_df.name.apply(tokenize_and_stem_set)
+    #pickle.dump(onto_df, open('/Users/matthewwerlock/Documents/ontologies/df2.p', 'wb'))
+    onto_df = pickle.load(open('/Users/matthewwerlock/Documents/ontologies/df2.p', 'rb'))
 else:
     print('Check python version')
-
-
-def get_matched_terms(target):
-    """Return a dataframe of matched ontology terms using Jaccard to score."""
-    jaccard_scores = []
-    # process search term for matching
-    words = word_tokenize(target)
-    filtered_target = [stemmer.stem(w) for w in words if w not in stop_words and w not in blacklist]
-    target_set = set(filtered_target)
-    # search ontology dictionary for matches using Jaccard distance
-    for key in d.keys():
-        for item in d[key]:
-            match_set = set(item)
-            score = jaccard_distance(target_set, match_set)
-            if score <= 0.5:
-                matched = [target.strip('\n'), ', '.join(filtered_target),
-                ', '.join(list(match_set)), get_name_from_id(key), key, score]
-                jaccard_scores.append(matched)
-    if len(jaccard_scores) == 0:
-        logging.warning('No terms found matching: {}'.format(target))
-    else:
-        # output to dataframe
-        df = pd.DataFrame(jaccard_scores)
-        df.columns = ['phenotype', 'phenotype search', 'matched search', 'term', 'id', 'score']
-        #df = df[['phenotype','term','id']]
-        df = df[['phenotype','term','id', 'score']]
-        df = df.drop_duplicates()
-        return df
 
 
 def reduce_terms(df):
@@ -235,9 +217,9 @@ def reduce_terms(df):
             # check to see if the pheno is a gene-specific omim/doid-type term
             if term.split(' ')[-1].isdigit():
                 # match the gene-specific entry
-                df1 = subdf[subdf.term.str.lower() == term.lower()]
+                df1 = subdf[subdf.matched_term.str.lower() == term.lower()]
                 # break phenotype term away from number suffix
-                x = subdf.term.str.split(' ')
+                x = subdf.matched_term.str.split(' ')
                 prefix = x.str[:-1].tolist()
                 try:
                     prefix = [' '.join(item) for item in prefix]
@@ -247,14 +229,14 @@ def reduce_terms(df):
                 subdf['term_prefix'] = prefix
                 subdf['term_suffix'] = suffix
                 # add all non-numbered (generic) entries
-                df2 = subdf[~subdf.term_suffix.str.isnumeric()][['phenotype', 'term', 'id', 'score']]
+                df2 = subdf[~subdf.term_suffix.str.isnumeric()][['phenotype', 'matched_term', 'id', 'score']]
                 # join these two elements together
                 df_part = pd.concat([df1,df2])
                 if df_part.shape[0] > 0:
                     reduced.append(df_part)
                 else:
                     # if no entries match this way, add everything that is available
-                    subdf = subdf[['phenotype', 'term', 'id', 'score']]
+                    subdf = subdf[['phenotype', 'matched_term', 'id', 'score']]
                     reduced.append(subdf)
             else:
                 # if the pheno is not gene-specific, add everything that is available
@@ -270,28 +252,31 @@ def reduce_terms(df):
 
 
 def map_ontology(targets):
-    '''match provided terms to ontologies and term files'''
     logging.basicConfig(level=logging.INFO,
     format='%(asctime)s %(levelname)s %(message)s',
     datefmt='%Y-%m-%d %H:%M')
+    #dfs = []
     outfiles = []
-    for target_term in targets:
-        df = get_matched_terms(target_term)
+    for target in targets:
+        outfile = '_'.join(target.split(' '))+'_ontologies.csv'
+        dfs = []
+        dfs.append(exact_search(target))
+        dfs.append(fuzzy_search(target))
+        df = pd.concat(dfs).sort_values(by='phenotype')
         cleaned_df = reduce_terms(df)
-        if cleaned_df is not None:
-            # set outfile name based on search term
-            outfile = '_'.join(target_term.split(' '))+'_ontologies.csv'
-            outfiles.append(outfile)
-            # write to file
-            cleaned_df.to_csv(outfile, sep='\t', header=True, index=False)
+        cleaned_df.to_csv(outfile, sep='\t', header=True, index=False)
+        outfiles.append(outfile)
     logging.info('Files created:')
     for outfile in outfiles:
         logging.info(outfile)
-    return
+    #cleaned_df.to_csv('more_exact_test_pd_minitest.csv', sep='\t', header=True, index=False)
+
+    #end = datetime.now()
+
+    #print(end-start)
 
 
 if __name__ == '__main__':
-    # for debugging only:
-    targets = ['retinitis pigmentosa 5', 'beals syndrome', 'bohring-opitz syndrome']
-    targets_note = 'Terms to match: '+', '.join(targets)
+    infile = argv[1]
+    targets = pd.read_csv(infile, header=None).iloc[:,0].tolist()
     map_ontology(targets)
