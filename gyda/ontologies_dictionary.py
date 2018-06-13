@@ -14,7 +14,7 @@ class OntologiesDictionary(object):
         self.do_file = config.get("do", None)
         self.omim_file = config.get("omim", None)
         self.snomed_file = config.get("snomed", None)
-        self.panelapp_file = config.get("snomed", None)
+        self.panelapp_file = config.get("panelapp", None)
 
         self._sanity_checks()
 
@@ -57,11 +57,12 @@ class OntologiesDictionary(object):
                 names = [entry.name]
                 names.extend([syn.desc for syn in entry.synonyms])
                 # loop through names and synonym_ids for orderedmatches
-                entries.append({
-                    "name": names,
-                    "id": entry.id,
-                    "primary_name": names[0]
-                })
+                for name in names:
+                    entries.append({
+                        "name": name,
+                        "id": entry.id,
+                        "primary_name": names[0]
+                    })
             except Exception, ex:
                 logging.error("Failed to parse term {}: {}".format(entry.id, ex.message))
                 raise ex
@@ -86,11 +87,12 @@ class OntologiesDictionary(object):
                     # alt_titles
                     if len(columns) > 3:
                         names.extend([x for x in map(lambda y: y.strip(), columns[3].split(';')) if x > 0])
-                    entries.append({
-                        "name": names,
-                        "id": "OMIM:%s".format(str(columns[1])),
-                        "primary_name": names[0]
-                    })
+                    for name in names:
+                        entries.append({
+                            "name": name,
+                            "id": "OMIM:{}".format(str(columns[1])),
+                            "primary_name": names[0]
+                        })
                 except Exception, ex:
                     logging.error("Failed to parse OMIM term {}: {}".format(line, ex.message))
                     raise ex
@@ -105,7 +107,7 @@ class OntologiesDictionary(object):
             df = pd.read_csv(snomed_csv, sep='\t', header=0, usecols=['conceptId', 'term']).drop_duplicates()
             # rename and rearrange columns
             df['name'] = df.term
-            df['id'] = 'SNOMEDCT:'+df['conceptId'].astype(str)
+            df['id'] = "SNOMEDCT:{}".format(df['conceptId'].astype(str))
             df['primary_name'] = df.term
             df = df[['name', 'id', 'primary_name']]
         except Exception, ex:
@@ -126,7 +128,7 @@ class OntologiesDictionary(object):
         panel_ids = []
         panel_names = []
         for panel in data['result']:
-            panel_ids.append('PANELAPP:' + panel['Panel_Id'])
+            panel_ids.append("PANELAPP:{}".format(panel['Panel_Id']))
             panel_names.append(panel['Name'])
         df['name'] = panel_names
         df['id'] = panel_ids
