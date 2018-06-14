@@ -18,6 +18,7 @@ def main():
     parser.add_argument('--omim', help='location of OMIM file', required=False)
     parser.add_argument('--snomed', help='location of SNOMEDCT file', required=False)
     parser.add_argument('--panelapp', help='location of PanelApp file', required=False)
+    parser.add_argument('--threshold', help='set the threshold for jaccard distance', default=0.5)
     args = parser.parse_args()
 
     # if --phenotype AND --file flags are included
@@ -59,14 +60,16 @@ def main():
     config["panelapp"] = args.panelapp
 
     # jaccard threshold for fuzzy dearch
-    config["threshold"] = 0.5
+    config["threshold"] = args.threshold
 
     #hpo_id_set = map_ontology(targets)
+    mapper = PhenotypeMapper(config)
+    df = mapper.map_phenotypes(targets)
     if args.outfile is not None:
-        mapper = PhenotypeMapper(config)
-        df = mapper.map_phenotypes(targets)
         outfile = args.outfile
-    df.to_csv(outfile, sep='\t', header=True, index=False)
+        df.to_csv(outfile, sep='\t', header=True, index=False)
+    else:
+        print(df.to_string())
 
 
 if __name__ == '__main__':
