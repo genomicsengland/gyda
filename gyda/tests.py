@@ -6,16 +6,18 @@ from gyda.ontologies_dictionary import OntologiesDictionary
 
 
 CONFIG = {
-    "hpo": "/home/priesgo/data/gyda/hp.obo",
-    "do": "/home/priesgo/data/gyda/doid-merged.obo",
-    "omim": "/home/priesgo/data/gyda/mimTitles.txt",
-    "snomed": "/home/priesgo/data/gyda/sct2_Description_Full-en_INT_20180131.txt"
+    "hpo": "/Users/matthewwerlock/Documents/ontologies/hp.obo",
+    "do": "/Users/matthewwerlock/Documents/ontologies/doid-merged.obo",
+    "omim": "/Users/matthewwerlock/Documents/ontologies/mimTitles.txt",
+    "panelapp": "/Users/matthewwerlock/Documents/ontologies/panelapp.json"
+    "snomed": "/Users/matthewwerlock/Documents/ontologies/sct2_Description_Full-en_INT_20180131.txt"
 }
 
 CONFIG_SMALL = {
-    "hpo": "/home/priesgo/data/gyda/hp.obo",
-    "do": "/home/priesgo/data/gyda/doid-merged.obo",
-    "omim": "/home/priesgo/data/gyda/mimTitles.txt"
+    "hpo": "/Users/matthewwerlock/Documents/ontologies/hp.obo",
+    "do": "/Users/matthewwerlock/Documents/ontologies/doid-merged.obo",
+    "omim": "/Users/matthewwerlock/Documents/ontologies/mimTitles.txt",
+    "panelapp": "/Users/matthewwerlock/Documents/ontologies/panelapp.json"
 }
 
 

@@ -63,7 +63,7 @@ class OntologiesDictionary(object):
                         "id": entry.id,
                         "primary_name": names[0]
                     })
-            except Exception, ex:
+            except Exception as ex:
                 logging.error("Failed to parse term {}: {}".format(entry.id, ex.message))
                 raise ex
         return pd.DataFrame(entries)
@@ -93,7 +93,7 @@ class OntologiesDictionary(object):
                             "id": "OMIM:{}".format(str(columns[1])),
                             "primary_name": names[0]
                         })
-                except Exception, ex:
+                except Exception as ex:
                     logging.error("Failed to parse OMIM term {}: {}".format(line, ex.message))
                     raise ex
         return pd.DataFrame(entries)
@@ -107,10 +107,11 @@ class OntologiesDictionary(object):
             df = pd.read_csv(snomed_csv, sep='\t', header=0, usecols=['conceptId', 'term']).drop_duplicates()
             # rename and rearrange columns
             df['name'] = df.term
-            df['id'] = "SNOMEDCT:{}".format(df['conceptId'].astype(str))
+            #df['id'] = "SNOMEDCT:{}".format(df['conceptId'].astype(str))
+            df['id'] = 'SNOMEDCT:'+df['conceptId'].astype(str)
             df['primary_name'] = df.term
             df = df[['name', 'id', 'primary_name']]
-        except Exception, ex:
+        except Exception as ex:
             logging.error("Failed to parse SNOMED CT: {}".format(ex.message))
             raise ex
         return df
@@ -122,7 +123,8 @@ class OntologiesDictionary(object):
         """
         # url = 'https://panelapp.genomicsengland.co.uk/WebServices/list_panels/'
         # response = urllib.request.urlopen(url)
-        data = json.load(panelapp_json)
+        with open(panelapp_json) as f:
+            data = json.load(f)
         df = pd.DataFrame()
         # prepare add panelapp data
         panel_ids = []

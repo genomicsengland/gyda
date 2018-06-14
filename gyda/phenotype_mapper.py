@@ -49,6 +49,9 @@ class PhenotypeMapper(object):
         step3 = time.time()
         logging.info("Every ontology term tokenised in {}!".format(str(step3 - step2)))
 
+        self.threshold = config.get('threshold', 0.5)
+
+
     @staticmethod
     def merge_stem_set(x):
         return " ".join(x)
@@ -69,7 +72,7 @@ class PhenotypeMapper(object):
         try:
             words = self.tokenizer.tokenize(PhenotypeMapper.normalise_text(text))
             stems = set([self.stemmer.stem(w) for w in words if w not in self.stop_words])
-        except Exception, ex:
+        except Exception as ex:
             logging.error("Error tokenising '{}'".format(text))
             raise ex
         return stems
@@ -87,7 +90,7 @@ class PhenotypeMapper(object):
         """search with stemmed terms using jaccard scores for similarity and filter on threshold"""
         matched_terms = self.ontologies_dataframe.copy()
         matched_terms['score'] = matched_terms.stem_set.apply(PhenotypeMapper.jaccard_score, args=[stemmed_target])
-        matched_terms = matched_terms[matched_terms.score <= 0.5]
+        matched_terms = matched_terms[matched_terms.score <= self.threshold]
         matched_terms['target'] = target
         matched_terms = matched_terms[['target', 'name', 'id', 'primary_name', 'score']]
         matched_terms.score = matched_terms.score.astype(str)
