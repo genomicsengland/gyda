@@ -145,9 +145,12 @@ class PhenotypeMapper(object):
                     df_part = subdf
                     reduced.append(df_part)
             # combine df parts into one df of reduced terms
-            dfred = pd.concat(reduced)
-            # sort elements by jaccard score
-            dfred = dfred.sort_values(by='score')
+            if reduced:
+                dfred = pd.concat(reduced)
+                # sort elements by jaccard score
+                dfred = dfred.sort_values(by='score')
+            else:
+                dfred = pd.DataFrame()
             return dfred
         else:
             return
