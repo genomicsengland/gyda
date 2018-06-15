@@ -1,8 +1,8 @@
 import os
 import logging
 import unittest
-from gyda.phenotype_mapper import PhenotypeMapper
-from gyda.ontologies_dictionary import OntologiesDictionary
+from gyda_cli.phenotype_mapper import PhenotypeMapper
+from gyda_cli.ontologies_dictionary import OntologiesDictionary
 
 
 CONFIG = {

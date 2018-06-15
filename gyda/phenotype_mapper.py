@@ -1,24 +1,12 @@
 """ Takes a phenotype string and returns matching ontology terms - more exact"""
 import nltk
-from nltk.corpus import wordnet, stopwords
+from nltk.corpus import stopwords
 from nltk.stem.snowball import SnowballStemmer
-from nltk.tokenize import word_tokenize
 from nltk.tokenize import RegexpTokenizer
-from nltk.metrics import jaccard_distance
-import pickle
 import pandas as pd
-import sys
-import os
-import argparse
 import logging
-import urllib
-import json
 import unicodedata
 import time
-
-from datetime import datetime
-from sys import argv
-
 from gyda.ontologies_dictionary import OntologiesDictionary
 
 
