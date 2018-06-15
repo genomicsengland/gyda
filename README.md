@@ -68,3 +68,11 @@ Input a file with multiple phenotypes and output in a file evaluated against mul
 
 * Natural Language Processing Toolkit (NLTK)
 * Pronto to parse OBO ontology files
+
+## Resources
+
+The ontologies were downloaded from:
+* HPO [http://human-phenotype-ontology.github.io/downloads.html](http://human-phenotype-ontology.github.io/downloads.html)
+* DO [http://www.obofoundry.org/ontology/doid.html](http://www.obofoundry.org/ontology/doid.html)
+* OMIM (requires registration)[https://omim.org/downloads/](https://omim.org/downloads/)
+* SNOMED CT (UK version) [https://isd.digital.nhs.uk/trud3/user/guest/group/0/home](https://isd.digital.nhs.uk/trud3/user/guest/group/0/home)
