@@ -5,7 +5,7 @@ setup(
     name='gyda',
     version='0.1.0',
     packages=find_packages(),
-    scripts=['scripts/ontology_terms_mapper.py'],
+    scripts=['scripts/gyda_cli.py'],
     url='',
     license='',
     author='',

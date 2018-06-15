@@ -1,11 +1,15 @@
 #!/usr/bin/env python
-from gyda.phenotype_mapper import *
 import argparse
 import logging
+import os
+from gyda.phenotype_mapper import PhenotypeMapper
 
 
 def main():
-    '''command line support for adding terms directly or from file'''
+    """
+    command line support for adding terms directly or from file
+    :return:
+    """
     logging.basicConfig(level=logging.INFO,
     format='%(asctime)s %(levelname)s %(message)s',
     datefmt='%Y-%m-%d %H:%M')
