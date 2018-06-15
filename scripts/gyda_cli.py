@@ -2,6 +2,7 @@
 import argparse
 import logging
 import os
+import sys
 from gyda.phenotype_mapper import PhenotypeMapper
 
 
@@ -10,13 +11,14 @@ def main():
     command line support for adding terms directly or from file
     :return:
     """
-    logging.basicConfig(level=logging.INFO,
-    format='%(asctime)s %(levelname)s %(message)s',
-    datefmt='%Y-%m-%d %H:%M')
+    logging.basicConfig(
+        level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
     parser = argparse.ArgumentParser(description='Gyda phenotype mapper')
-    parser.add_argument('-p', '--phenotype', help='a single phenotype', required=False)
-    parser.add_argument('-i', '--infile', help='a file containing a list of phenotypes', required=False)
-    parser.add_argument('-o', '--outfile', help='file name for csv containing mapped terms', required=True)
+    parser.add_argument('-p', '--phenotype', help='a single input phenotype', required=False)
+    parser.add_argument('-i', '--infile', help='a file containing a list of input phenotypes (one phenotype per row)',
+                        required=False)
+    parser.add_argument('-o', '--outfile', help='file name for csv with results (if not provided results are printed '
+                                                'to the standard output)', required=False)
     parser.add_argument('--hpo', help='location of hpo obo file', required=False)
     parser.add_argument('--do', help='location of disease ontology obo file', required=False)
     parser.add_argument('--omim', help='location of OMIM file', required=False)
@@ -27,11 +29,10 @@ def main():
 
     # if --phenotype AND --file flags are included
     if args.phenotype is not None and args.infile is not None:
-        with open(os.path.join('files',args.infile), 'r') as f:
+        with open(os.path.join('files', args.infile), 'r') as f:
             targets = [line.strip() for line in f if len(line.strip()) > 0]
         targets += [args.phenotype]
-        targets_note = 'Terms to match: '+', '.join(targets)
-        logging.info(targets_note)
+        logging.info("{} terms to match".format(len(targets)))
     # if only --phenotype flag is used
     elif args.phenotype is not None:
         assert isinstance(args.phenotype, str), 'This is not a string'
@@ -41,10 +42,8 @@ def main():
     # if only --file flag is used
     elif args.infile is not None:
         # check file actually exists
-        #assert os.path.isfile(os.path.join('files',args.file)), 'File not found'
         assert os.path.isfile(args.infile), 'File not found'
         targets = []
-        #with open(os.path.join('files',args.file), 'r') as f:
         with open(args.infile, 'r') as f:
             targets = [line.strip() for line in f if len(line.strip()) > 0]
             targets_note = 'Terms to match: '+', '.join(targets)
@@ -66,14 +65,16 @@ def main():
     # jaccard threshold for fuzzy dearch
     config["threshold"] = args.threshold
 
-    #hpo_id_set = map_ontology(targets)
     mapper = PhenotypeMapper(config)
     df = mapper.map_phenotypes(targets)
     if args.outfile is not None:
         outfile = args.outfile
         df.to_csv(outfile, sep='\t', header=True, index=False)
     else:
-        print(df.to_string())
+        if df.empty:
+            print "No results"
+        else:
+            print(df.to_string())
 
 
 if __name__ == '__main__':
