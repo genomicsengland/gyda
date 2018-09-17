@@ -3,7 +3,7 @@ from setuptools import find_packages
 
 setup(
     name='gyda',
-    version='0.1.0',
+    version='0.2.0-SNAPSHOT',
     packages=find_packages(),
     scripts=['scripts/gyda_cli.py'],
     url='',
