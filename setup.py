@@ -15,6 +15,7 @@ setup(
         'pandas==0.23.0',
         'pronto==0.10.2',
         'nltk==3.3',
+        'requests',
         'nose'
     ]
 )

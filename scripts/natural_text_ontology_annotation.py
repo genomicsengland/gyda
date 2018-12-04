@@ -6,6 +6,7 @@ import sys
 
 from pkg_resources import get_distribution
 
+from gyda.PhenotypeMappers import ZoomaMapper
 from gyda.io.TextReaders import PanelAppDiseasesReader
 
 logging.basicConfig(level=logging.INFO,
@@ -42,32 +43,41 @@ def _parse_params(args):
     if os.path.exists(os.path.dirname(args.outfile)):
         outfile = args.outfile
     else:
-        raise FileNotFoundError("Please provide valid output path")
+        raise IOError("Please provide valid output path")
 
 
 def _get_trait_reader():
     return PanelAppDiseasesReader()
 
 
-def _get_ontology_annotator():
-    pass
+def _get_phenotype_mapper():
+    return ZoomaMapper()
 
 
 def _natural_text_ontology_annotation():
+
+    logger.info("Reading traits...")
     trait_reader = _get_trait_reader()
-    ontology_annotator = _get_ontology_annotator()
-    global outfile
-    fdw = open(outfile, "w")
     trait_reader.open()
+    str_set = set([text for text in trait_reader.read()])
+    trait_reader.close()
+
     logger.info("Annotating...")
-    for text in trait_reader:
-        annotation_result_list = ontology_annotator.run(text)
-        if annotation_result_list:
+    ontology_annotator = _get_phenotype_mapper()
+    mapping_result_list = ontology_annotator.run(list(str_set))
+
+    logger.info("Writing results...")
+    mapping_writer = _get_mapping_writer()
+    mapping_writer.open()
+    mapping_writer.write(mapping_result_list)
+    mapping_writer.close()
+
+        if mapping_result_list:
             fdw.write("{text}".format(text=text))
-            for annotation_result in annotation_result_list:
+            for annotation_result in mapping_result_list:
                 fdw.write("\t{name}\t{id}\n".format(name=annotation_result.term.name, id=annotation_result.term.id))
     fdw.close()
-    trait_reader.close()
+
 
 
 def main():
