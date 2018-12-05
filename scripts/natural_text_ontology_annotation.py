@@ -7,6 +7,7 @@ import sys
 from pkg_resources import get_distribution
 
 from gyda.PhenotypeMappers import ZoomaMapper
+from gyda.io.TermMappingResultWriters import TermMappingResultTsvWriter
 from gyda.io.TextReaders import PanelAppDiseasesReader
 
 logging.basicConfig(level=logging.INFO,
@@ -32,6 +33,13 @@ _RESULT_FIELD = "result"
 _ANNOTATION_FIELD = "annotation"
 _TRAIT_ASSOCIATION_FIELD = "traitAssociation"
 _HERITABLE_TRAITS_FIELD = "heritableTraits"
+_AVAILABLE_PANEL_TYPES = {PanelAppDiseasesReader.RD_PANEL_TYPE, PanelAppDiseasesReader.CC_PANEL_TYPE}
+_AVAILABLE_PANEL_FIELDS = {PanelAppDiseasesReader.NAME_FIELD, PanelAppDiseasesReader.RELEVANT_DISORDERS_FIELD,
+                           PanelAppDiseasesReader.PHENOTYPES_FIELD}
+_CLI_MULTIPLE_FIELD_SEPARATOR = ","
+
+allowed_panel_type_list = []
+allowed_panel_field_list = []
 
 
 def _log_software_version():
@@ -39,23 +47,50 @@ def _log_software_version():
 
 
 def _parse_params(args):
+    logger.info("Parameters {cli_parameters}".format(cli_parameters=str(args)))
     global outfile
     if os.path.exists(os.path.dirname(args.outfile)):
         outfile = args.outfile
     else:
         raise IOError("Please provide valid output path")
 
+    global allowed_panel_type_list
+    if args.panel_types is None:
+        allowed_panel_type_list = list(_AVAILABLE_PANEL_TYPES)
+    else:
+        allowed_panel_type_list = [panel_type.lower() for panel_type
+                                   in args.panel_types.split(_CLI_MULTIPLE_FIELD_SEPARATOR)]
+        if set(allowed_panel_type_list) - _AVAILABLE_PANEL_TYPES:
+            raise ValueError("One or more panel types specified is not valid. Please, provide a comma separated list"
+                             "of panel types from avavilable types {available_panel_types}"
+                             .format(available_panel_types=str(_AVAILABLE_PANEL_TYPES)))
+
+    global allowed_panel_field_list
+    if args.panel_fields is None:
+        allowed_panel_field_list = list(_AVAILABLE_PANEL_FIELDS)
+    else:
+        allowed_panel_field_list = [panel_field.lower() for panel_field
+                                    in args.panel_fields.split(_CLI_MULTIPLE_FIELD_SEPARATOR)]
+        if set(allowed_panel_field_list) - _AVAILABLE_PANEL_FIELDS:
+            raise ValueError("One or more panel fields specified is not valid. Please, provide a comma separated list"
+                             "of panel fields from avavilable fields {available_panel_fields}"
+                             .format(available_panel_fields=str(_AVAILABLE_PANEL_FIELDS)))
+
 
 def _get_trait_reader():
-    return PanelAppDiseasesReader()
+    return PanelAppDiseasesReader(allowed_panel_type_list, allowed_panel_field_list)
 
 
 def _get_phenotype_mapper():
     return ZoomaMapper()
 
 
-def _natural_text_ontology_annotation():
+def _get_mapping_writer():
+    global outfile
+    return TermMappingResultTsvWriter(outfile)
 
+
+def _natural_text_ontology_annotation():
     logger.info("Reading traits...")
     trait_reader = _get_trait_reader()
     trait_reader.open()
@@ -69,15 +104,9 @@ def _natural_text_ontology_annotation():
     logger.info("Writing results...")
     mapping_writer = _get_mapping_writer()
     mapping_writer.open()
+    mapping_writer.pre()
     mapping_writer.write(mapping_result_list)
     mapping_writer.close()
-
-        if mapping_result_list:
-            fdw.write("{text}".format(text=text))
-            for annotation_result in mapping_result_list:
-                fdw.write("\t{name}\t{id}\n".format(name=annotation_result.term.name, id=annotation_result.term.id))
-    fdw.close()
-
 
 
 def main():
@@ -85,8 +114,20 @@ def main():
     command line support for annotating ClinVar phenotypes with ontology terms
     :return:
     """
-    parser = argparse.ArgumentParser(description='ClinVar phenotype mapper')
+    parser = argparse.ArgumentParser(description='Text to ontology mapper')
     parser.add_argument('-o', '--outfile', help='file name for csv with results', required=True)
+    parser.add_argument('-p', '--panel-types', help='Comma separated list of panel types to consider. Available '
+                                                    'options {available_panel_types}'
+                        .format(available_panel_types=str(_AVAILABLE_PANEL_TYPES)),
+                        required=False,
+                        default=None,
+                        dest="panel_types")
+    parser.add_argument('-f', '--panel-fields', help='Comma separated list of panel fields to read from. Available '
+                                                     'options {available_panel_fields}'
+                        .format(available_panel_fields=_AVAILABLE_PANEL_FIELDS),
+                        required=False,
+                        default=None,
+                        dest="panel_fields")
     _log_software_version()
     args = parser.parse_args()
     _parse_params(args)

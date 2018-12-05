@@ -6,3 +6,4 @@ pronto==0.10.2
 python-dateutil==2.7.3
 pytz==2018.4
 six==1.11.0
+GelReportModels==7.1.16
