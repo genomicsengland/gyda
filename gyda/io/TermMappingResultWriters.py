@@ -51,20 +51,15 @@ class TermMappingResultTsvWriter(TermMappingResultWriter):
     def write(self, term_mapping_result_list):
         for term_mapping_result in term_mapping_result_list:
             for term_result in term_mapping_result.result:
-                try:
-                    self._fd.write("{query}\t{term_name}\t{term_id}\t{confidence}\t{ontology}\n"
-                                   .format(query=term_mapping_result.query.encode('utf-8'),
-                                           term_name=self._get_if_not_missing(term_result.standard_phenotype.name)
-                                           .encode('utf-8'),
-                                           term_id=self._get_if_not_missing(term_result.standard_phenotype.id),
-                                           confidence=self._get_if_not_missing(term_result.confidence),
-                                           ontology=self._get_ontology_name(term_result.standard_phenotype.ontology)))
-                except AttributeError, e:
-                    print "term_mapping_result: " + str(term_mapping_result.query)
-                    print "term_result.standard_phenotype.name: " + str(term_result.standard_phenotype.name)
-                    print "term_result.standard_phenotype.id: " + str(term_result.standard_phenotype.id)
-                    print "term_result.confidence: " + str(term_result.confidence)
-                    raise e
+                self._fd.write("{query}\t{term_name}\t{term_id}\t{confidence}\t{ontology}\n"
+                               .format(query=term_mapping_result.query.encode('utf-8', errors="ignore"),
+                                       term_name=self._get_if_not_missing(term_result.standard_phenotype.name)
+                                       .encode('utf-8', errors="ignore"),
+                                       term_id=self._get_if_not_missing(term_result.standard_phenotype.id)
+                                       .encode('utf-8', errors="ignore"),
+                                       confidence=self._get_if_not_missing(term_result.confidence)
+                                       .encode('utf-8', errors="ignore"),
+                                       ontology=self._get_ontology_name(term_result.standard_phenotype.ontology)))
 
     def post(self):
         pass

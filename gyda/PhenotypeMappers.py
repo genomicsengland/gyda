@@ -54,6 +54,7 @@ class ZoomaMapper(PhenotypeMapper):
     _DOID_NAME = "DOID"
     _NCIT_PREFIX = "ncit"
     _NCIT_NAME = "NCIT"
+    _DID_NOT_MAP = "Did not map"
 
     def __init__(self):
         PhenotypeMapper.__init__(self)
@@ -101,8 +102,8 @@ class ZoomaMapper(PhenotypeMapper):
         if json_result and self._DATA_FIELD in json_result:
             for result_dict in json_result[self._DATA_FIELD]:
                 term_result = self._parse_term_result(result_dict)
-                if term_result is not None:
-                    query = self._get_if_present(result_dict[self._PROPERTY_VALUE_POSITION])
+                query = self._get_if_present(result_dict[self._PROPERTY_VALUE_POSITION])
+                if term_result is not None and query is not None:
                     if query in query2term_result_dict:
                         query2term_result_dict[query].append(term_result)
                     else:

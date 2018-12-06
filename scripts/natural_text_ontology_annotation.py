@@ -94,7 +94,7 @@ def _natural_text_ontology_annotation():
     logger.info("Reading traits...")
     trait_reader = _get_trait_reader()
     trait_reader.open()
-    str_set = set([text for text in trait_reader.read()])
+    str_set = set([text for text in trait_reader.read() if text])
     trait_reader.close()
 
     logger.info("Annotating...")
