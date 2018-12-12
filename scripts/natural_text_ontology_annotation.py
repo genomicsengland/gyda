@@ -36,10 +36,19 @@ _HERITABLE_TRAITS_FIELD = "heritableTraits"
 _AVAILABLE_PANEL_TYPES = {PanelAppDiseasesReader.RD_PANEL_TYPE, PanelAppDiseasesReader.CC_PANEL_TYPE}
 _AVAILABLE_PANEL_FIELDS = {PanelAppDiseasesReader.NAME_FIELD, PanelAppDiseasesReader.RELEVANT_DISORDERS_FIELD,
                            PanelAppDiseasesReader.PHENOTYPES_FIELD}
+
+# Zooma offers more than these vocabularies. I just set these here since are the ones I am familiar with but this list
+# can be extended. Note HPO written explicitly since Zooma API asks for "HP" rather than "HPO" which in my opinion is
+# counterintuitive
+_AVAILABLE_ZOOMA_VOCABULARIES = {ZoomaMapper.CMPO_NAME.lower(), ZoomaMapper.ORPHANET_NAME.lower(),
+                                 ZoomaMapper.EFO_NAME.lower(), ZoomaMapper.CHEBI_NAME.lower(),
+                                 ZoomaMapper.DOID_NAME.lower(), ZoomaMapper.NCIT_NAME.lower(), "hpo"}
+
 _CLI_MULTIPLE_FIELD_SEPARATOR = ","
 
 allowed_panel_type_list = []
 allowed_panel_field_list = []
+allowed_vocabulary_list = []
 
 
 def _log_software_version():
@@ -76,13 +85,31 @@ def _parse_params(args):
                              "of panel fields from avavilable fields {available_panel_fields}"
                              .format(available_panel_fields=str(_AVAILABLE_PANEL_FIELDS)))
 
+    global allowed_vocabulary_list
+    if args.vocabularies is None:
+        allowed_vocabulary_list = None
+    else:
+        allowed_vocabulary_list = [vocabulary.lower() for vocabulary
+                                    in args.vocabularies.split(_CLI_MULTIPLE_FIELD_SEPARATOR)]
+        if set(allowed_vocabulary_list) - _AVAILABLE_ZOOMA_VOCABULARIES:
+            raise ValueError("One or more vocabularies specified is not valid. Please, provide a comma separated list"
+                             "of vocabularies from available options {available_zooma_vocabularies}"
+                             .format(available_zooma_vocabularies=str(_AVAILABLE_ZOOMA_VOCABULARIES)))
+
+        # Zooma API uses "hp" rather than "hpo". I changed it for the CLI since seems counterintuitive. Needs
+        # translation before passing it over to the ZoomaMapper
+        if "hpo" in allowed_vocabulary_list:
+            allowed_vocabulary_list.remove("hpo")
+            allowed_vocabulary_list.append(ZoomaMapper.HPO_NAME)
+
 
 def _get_trait_reader():
     return PanelAppDiseasesReader(allowed_panel_type_list, allowed_panel_field_list)
 
 
 def _get_phenotype_mapper():
-    return ZoomaMapper()
+    global allowed_vocabulary_list
+    return ZoomaMapper(allowed_vocabulary_list=allowed_vocabulary_list)
 
 
 def _get_mapping_writer():
@@ -128,6 +155,13 @@ def main():
                         required=False,
                         default=None,
                         dest="panel_fields")
+    parser.add_argument('-v', '--vocabularies', help='Comma separated list of vocabularies to use. Available '
+                                                     'vocabularies for ZOOMA:'
+                                                     ' {available_zooma_vocabularies}'
+                        .format(available_zooma_vocabularies=_AVAILABLE_ZOOMA_VOCABULARIES),
+                        required=False,
+                        default=None,
+                        dest="vocabularies")
     _log_software_version()
     args = parser.parse_args()
     _parse_params(args)

@@ -24,6 +24,7 @@ class PhenotypeMapper:
 
 class ZoomaMapper(PhenotypeMapper):
     _HOST = "https://www.ebi.ac.uk"
+    _ONTOLOGIES_QUERY_PARAM = "ontologies"
     _BATCH_SIZE = 200
     _PROPERTY_VALUE_FIELD = "propertyValue"
     _PROPERTY_VALUE_POSITION = 1
@@ -32,32 +33,33 @@ class ZoomaMapper(PhenotypeMapper):
     _CONFIDENCE_POSITION = 4
     _DATA_FIELD = "data"
     _RESPONSE_FIELD = 'response'
-    _UNKNOWN_EXPERIMENTS = "[UNKNOWN EXPERIMENTS]"
-    _NO_TYPE = "[NO TYPE]"
-    _NA = "na"
-    _NULL = "null"
     _NONE = "none"
     _SEPARATOR = ", "
     _READY = "1.0"
+    _MISSING_VALUES = {"[UNKNOWN EXPERIMENTS]", "[NO TYPE]", "na", "NA", "N/A", "null", "none", "Did not map"}
+    _EMPTY_STRING = ""
+    _QUOTES = "\'"
+    _SPACE = " "
 
     _CMPO_PREFIX = "cmpo"
-    _CMPO_NAME = "CMPO"
+    CMPO_NAME = "CMPO"
     _ORPHANET_PREFIX = "orphanet"
-    _ORPHANET_NAME = "Orphanet"
+    ORPHANET_NAME = "Orphanet"
     _EFO_PREFIX = "efo"
-    _EFO_NAME = "EFO"
+    EFO_NAME = "EFO"
     _CHEBI_PREFIX = "chebi"
-    _CHEBI_NAME = "CHEBI"
+    CHEBI_NAME = "CHEBI"
     _HPO_PREFIX = "hp"
-    _HPO_NAME = "HPO"
+    HPO_NAME = "HP"
     _DOID_PREFIX = "doid"
-    _DOID_NAME = "DOID"
+    DOID_NAME = "DOID"
     _NCIT_PREFIX = "ncit"
-    _NCIT_NAME = "NCIT"
+    NCIT_NAME = "NCIT"
     _DID_NOT_MAP = "Did not map"
 
-    def __init__(self):
+    def __init__(self, allowed_vocabulary_list=None):
         PhenotypeMapper.__init__(self)
+        self._allowed_vocabulary_list = allowed_vocabulary_list
         self._session = requests.Session()
         self._session.headers.update({"Accept-Encoding": "gzip"})
         self._session.headers.update({"Content-type": "application/json"})
@@ -85,10 +87,34 @@ class ZoomaMapper(PhenotypeMapper):
 
     def _next_batch(self, str_list):
         for i in range(0, len(str_list), self._BATCH_SIZE):
-            yield str_list[i:i+self._BATCH_SIZE]
+            yield str_list[i:i + self._BATCH_SIZE]
 
     def _create_submission_url(self):
-        return "{host}/spot/zooma/v2/api/services/map?json".format(host=self._HOST)
+        return "{host}/spot/zooma/v2/api/services/map?json{query_param}" \
+            .format(host=self._HOST,
+                    query_param=self._get_query_param_string())
+
+    def _get_query_param_string(self):
+        query_param_string = self._EMPTY_STRING
+        filter_param_dict = {}
+        if self._allowed_vocabulary_list:
+            filter_param_dict[self._ONTOLOGIES_QUERY_PARAM] = self._allowed_vocabulary_list
+
+        if filter_param_dict:
+            query_param_string = "&filter="
+            i = 0
+            for filter_param, value in filter_param_dict.iteritems():
+                if i > 0:
+                    query_param_string += ","
+
+                # For lists, python str method will include quotes for string values and will leave an space in between
+                # elements of the string - remove these
+                query_param_string += "{query_param}:{value}" \
+                    .format(query_param=filter_param,
+                            value=str(value).replace(self._QUOTES, self._EMPTY_STRING)
+                            .replace(self._SPACE, self._EMPTY_STRING))
+
+        return query_param_string
 
     def _create_request_payload(self, str_list):
         return json.dumps([self._create_payload_dict(string) for string in str_list])
@@ -109,9 +135,9 @@ class ZoomaMapper(PhenotypeMapper):
                     else:
                         query2term_result_dict[query] = [term_result]
 
-            for query, term_result in query2term_result_dict.iteritems():
+            for query, term_result_list in query2term_result_dict.iteritems():
                 term_mapping_result_list \
-                    .append(TermMappingResult(query, term_result))
+                    .append(TermMappingResult(query, term_result_list))
 
         return term_mapping_result_list
 
@@ -122,70 +148,60 @@ class ZoomaMapper(PhenotypeMapper):
             return string
 
     def _is_missing(self, string):
-        if not string \
-                or string == self._UNKNOWN_EXPERIMENTS \
-                or string == self._NO_TYPE \
-                or string.lower() == self._NA \
-                or string.lower() == self._NULL \
-                or string.lower() == self._NONE:
-            return True
-        else:
-            return False
+        return not string or string in self._MISSING_VALUES
 
     def _parse_term_result(self, mapping_result_list):
 
         confidence = self._get_if_present(mapping_result_list[self._CONFIDENCE_POSITION])
+        label = self._get_if_present(mapping_result_list[self._LABEL_POSITION])
+        term_id = self._get_if_present(mapping_result_list[self._TERM_ID_POSITION])
 
-        if confidence != self._DID_NOT_MAP:
-            label = self._get_if_present(mapping_result_list[self._LABEL_POSITION])
-            term_id = self._get_if_present(mapping_result_list[self._TERM_ID_POSITION])
+        if confidence is None or label is None or term_id is None:
+            return None
 
-            return TermResult(StandardPhenotype(id=term_id,
-                                                name=label,
-                                                ontology=self._get_ontology(term_id)), confidence)
+        return TermResult(StandardPhenotype(id=term_id,
+                                            name=label,
+                                            ontology=self._get_ontology(term_id)), confidence)
 
-            # term_result_list = []
-            #
-            # label_list_string = self._get_if_present(mapping_result_list[self._LABEL_POSITION])
-            # label_list = []
-            # if label_list_string is not None:
-            #     label_list = label_list_string.split(self._SEPARATOR)
-            #
-            # confidence = self._get_if_present(mapping_result_list[self._CONFIDENCE_POSITION])
-            #
-            # term_id_list_string = self._get_if_present(mapping_result_list[self._TERM_ID_POSITION])
-            # if term_id_list_string is not None:
-            #     term_id_list = term_id_list_string.split(self._SEPARATOR)
-            #     if len(term_id_list) != len(label_list):
-            #         raise RuntimeError("List of returned labels and list of returned term ids do not have same length. "
-            #                            "Please, check. Mapping result: {mapping_result}"
-            #                            .format(mapping_result=str(mapping_result_list)))
-            #
-            #     # Assuming term labels and term ids are in correlative positions
-            #     for i, term_id in enumerate(term_id_list):
-            #         term_result_list.append(TermResult(StandardPhenotype(id=term_id,
-            #                                                              name=label_list[i],
-            #                                                              ontology=self._get_ontology(term_id)), confidence))
-
-            return term_result_list
-        return None
+        # term_result_list = []
+        #
+        # label_list_string = self._get_if_present(mapping_result_list[self._LABEL_POSITION])
+        # label_list = []
+        # if label_list_string is not None:
+        #     label_list = label_list_string.split(self._SEPARATOR)
+        #
+        # confidence = self._get_if_present(mapping_result_list[self._CONFIDENCE_POSITION])
+        #
+        # term_id_list_string = self._get_if_present(mapping_result_list[self._TERM_ID_POSITION])
+        # if term_id_list_string is not None:
+        #     term_id_list = term_id_list_string.split(self._SEPARATOR)
+        #     if len(term_id_list) != len(label_list):
+        #         raise RuntimeError("List of returned labels and list of returned term ids do not have same length. "
+        #                            "Please, check. Mapping result: {mapping_result}"
+        #                            .format(mapping_result=str(mapping_result_list)))
+        #
+        #     # Assuming term labels and term ids are in correlative positions
+        #     for i, term_id in enumerate(term_id_list):
+        #         term_result_list.append(TermResult(StandardPhenotype(id=term_id,
+        #                                                              name=label_list[i],
+        #                                                              ontology=self._get_ontology(term_id)), confidence))
 
     def _get_ontology(self, term_id):
         if term_id:
             if term_id.lower().startswith(self._CMPO_PREFIX):
-                return Ontology(name=self._CMPO_NAME)
+                return Ontology(name=self.CMPO_NAME)
             elif term_id.lower().startswith(self._ORPHANET_PREFIX):
-                return Ontology(name=self._ORPHANET_NAME)
+                return Ontology(name=self.ORPHANET_NAME)
             elif term_id.lower().startswith(self._EFO_PREFIX):
-                return Ontology(name=self._EFO_NAME)
+                return Ontology(name=self.EFO_NAME)
             elif term_id.lower().startswith(self._CHEBI_PREFIX):
-                return Ontology(name=self._CHEBI_NAME)
+                return Ontology(name=self.CHEBI_NAME)
             elif term_id.lower().startswith(self._HPO_PREFIX):
-                return Ontology(name=self._HPO_NAME)
+                return Ontology(name=self.HPO_NAME)
             elif term_id.lower().startswith(self._DOID_PREFIX):
-                return Ontology(name=self._DOID_NAME)
+                return Ontology(name=self.DOID_NAME)
             elif term_id.lower().startswith(self._NCIT_PREFIX):
-                return Ontology(name=self._NCIT_NAME)
+                return Ontology(name=self.NCIT_NAME)
 
         return None
 
