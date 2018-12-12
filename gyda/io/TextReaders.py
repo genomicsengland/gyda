@@ -65,8 +65,6 @@ class PanelAppDiseasesReader(TextReader):
         for gene in self._resource.gene_list():
             if i % 100 == 0:
                 self._logger.info("{i} gene (panel-specific) entities read".format(i=i))
-                if i > 0:
-                    break
 
             if self._allowed_panel_type_set is None \
                     or self._get_panel_type_set(gene).intersection(self._allowed_panel_type_set):
