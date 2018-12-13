@@ -50,7 +50,7 @@ class ZoomaMapper(PhenotypeMapper):
     _CHEBI_PREFIX = "chebi"
     CHEBI_NAME = "CHEBI"
     _HPO_PREFIX = "hp"
-    HPO_NAME = "HP"
+    HPO_NAME = "HPO"
     _DOID_PREFIX = "doid"
     DOID_NAME = "DOID"
     _NCIT_PREFIX = "ncit"
